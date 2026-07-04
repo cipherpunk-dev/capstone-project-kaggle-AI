@@ -18,7 +18,17 @@ const EXCLUDED_DIRS = new Set([
   'out', 'coverage', '.next', '.cache', 'vendor', 'tmp'
 ]);
 const EXCLUDED_FILES = new Set(['package-lock.json', 'yarn.lock', 'pnpm-lock.yaml']);
-const ALLOWED_EXTENSIONS = new Set(['.js', '.ts', '.jsx', '.tsx', '.json', '.md', '.prisma', '.py', '.go', '.java', '.rb']);
+const ALLOWED_EXTENSIONS = new Set([
+  '.js', '.ts', '.jsx', '.tsx', '.json', '.md', '.prisma',
+  '.py', '.go', '.java', '.rb',
+  '.c', '.cpp', '.cc', '.cxx', '.h', '.hpp', '.hxx',    // C/C++
+  '.cs',                                                   // C#
+  '.rs', '.swift', '.kt', '.kts',                         // Rust, Swift, Kotlin
+  '.php', '.lua', '.r', '.scala', '.sh', '.bash',         // Others
+  '.sql', '.graphql', '.proto',                            // Data/Schema
+  '.yaml', '.yml', '.toml', '.env', '.cfg', '.ini',       // Config
+  '.html', '.css', '.scss', '.less', '.vue', '.svelte',   // Frontend
+]);
 const MAX_FILE_SIZE = 100 * 1024; // Skip files > 100KB
 const MAX_TOTAL_CHARS = 50000; // Cap total context to save Gemini quota
 
@@ -69,26 +79,35 @@ router.post('/start', authMiddleware, async (req, res) => {
   try {
     const { codebaseContext, localPath, projectId } = req.body;
     
+    console.log('[Viva Start] Request received:', { localPath: localPath || 'none', hasCodeContext: !!codebaseContext, projectId });
+
     let contextToUse = codebaseContext || '';
     if (localPath) {
       if (fs.existsSync(localPath)) {
+        console.log('[Viva Start] Reading directory:', localPath);
         contextToUse = readDirectoryContext(localPath);
+        console.log('[Viva Start] Context length:', contextToUse.length, 'chars');
       } else {
-        return res.status(400).json({ error: 'Local path does not exist' });
+        return res.status(400).json({ error: `Local path does not exist: "${localPath}"` });
       }
     }
 
     if (!contextToUse || contextToUse.trim().length === 0) {
-      return res.status(400).json({ error: 'Code context or valid localPath is required' });
+      return res.status(400).json({ error: 'No code files found. Make sure the directory contains source code files (.js, .ts, .py, etc.)' });
+    }
+
+    if (!geminiApiKey) {
+      return res.status(500).json({ error: 'GEMINI_API_KEY is not configured on the server.' });
     }
 
     const interviewer = new InterviewerAgent(geminiApiKey);
     const result = await interviewer.generateQuestion(contextToUse, []);
 
+    console.log('[Viva Start] Questions generated:', result.questions?.length || 0);
     res.json(result);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Failed to start viva session' });
+    console.error('[Viva Start] Error:', error.message, error.stack);
+    res.status(500).json({ error: `Failed to start viva session: ${error.message}` });
   }
 });
 

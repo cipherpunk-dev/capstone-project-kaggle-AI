@@ -21,6 +21,10 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ error: 'User already exists' });
     }
 
+    if (email === 'admin@viva.com') {
+      return res.status(403).json({ error: 'Cannot register with admin email' });
+    }
+
     const hashedPassword = await bcrypt.hash(password, 10);
     user = await prisma.user.create({
       data: {
@@ -41,7 +45,7 @@ router.post('/register', async (req, res) => {
       { expiresIn: '5d' },
       (err, token) => {
         if (err) throw err;
-        res.status(201).json({ token, user: { id: user.id, email: user.email } });
+        res.status(201).json({ token, user: { id: user.id, email: user.email, role: 'user' } });
       }
     );
   } catch (error) {
@@ -57,27 +61,41 @@ router.post('/login', async (req, res) => {
   try {
     const { email, password } = loginSchema.parse(req.body);
 
+    // Hardcoded Admin Logic
+    if (email === 'admin@viva.com' && password === 'admin123') {
+      const payload = {
+        user: {
+          id: 'admin',
+          role: 'admin'
+        }
+      };
+      
+      return jwt.sign(
+        payload,
+        process.env.JWT_SECRET || 'secret-key',
+        { expiresIn: '5d' },
+        (err, token) => {
+          if (err) throw err;
+          res.json({ token, user: { id: 'admin', email: 'admin@viva.com', role: 'admin' } });
+        }
+      );
+    }
+
     let user = await prisma.user.findUnique({ where: { email } });
 
-    // For this MVP, if the user doesn't exist, we will create them (auto-register on login for ease of testing)
     if (!user) {
-      const hashedPassword = await bcrypt.hash(password, 10);
-      user = await prisma.user.create({
-        data: {
-          email,
-          password: hashedPassword,
-        },
-      });
-    } else {
-      const isMatch = await bcrypt.compare(password, user.password);
-      if (!isMatch) {
-        return res.status(400).json({ error: 'Invalid credentials' });
-      }
+      return res.status(400).json({ error: 'Invalid credentials' });
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ error: 'Invalid credentials' });
     }
 
     const payload = {
       user: {
         id: user.id,
+        role: 'user'
       },
     };
 
@@ -87,7 +105,7 @@ router.post('/login', async (req, res) => {
       { expiresIn: '5d' },
       (err, token) => {
         if (err) throw err;
-        res.json({ token, user: { id: user.id, email: user.email } });
+        res.json({ token, user: { id: user.id, email: user.email, role: 'user' } });
       }
     );
   } catch (error) {

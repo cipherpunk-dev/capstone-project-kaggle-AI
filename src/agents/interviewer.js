@@ -36,45 +36,58 @@ ${historyText ? historyText : 'No history yet. This is the first question set.'}
 Based on the code context above, please ask the next 3 technical viva questions.
 `;
 
-    try {
-      const response = await this.ai.models.generateContent({
-        model: this.modelName,
-        contents: prompt,
-        config: {
-          systemInstruction: systemInstruction,
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: 'OBJECT',
-            properties: {
-              questions: {
-                type: 'ARRAY',
-                items: {
-                  type: 'OBJECT',
-                  properties: {
-                    question: { type: 'STRING' },
-                    contextReferenced: { type: 'STRING' }
-                  },
-                  required: ['question', 'contextReferenced']
+    let lastError;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const response = await this.ai.models.generateContent({
+          model: this.modelName,
+          contents: prompt,
+          config: {
+            systemInstruction: systemInstruction,
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: 'OBJECT',
+              properties: {
+                questions: {
+                  type: 'ARRAY',
+                  items: {
+                    type: 'OBJECT',
+                    properties: {
+                      question: { type: 'STRING' },
+                      contextReferenced: { type: 'STRING' }
+                    },
+                    required: ['question', 'contextReferenced']
+                  }
                 }
-              }
+              },
+              required: ['questions']
             },
-            required: ['questions']
-          },
-          temperature: 0.7
-        }
-      });
+            temperature: 0.7
+          }
+        });
 
-      const parsed = JSON.parse(response.text);
-      return parsed;
-    } catch (error) {
-      console.error("Error in InterviewerAgent:", error.message);
-      return {
-        questions: [
-          { question: "Could you explain the overarching architecture of your application?", contextReferenced: "General" },
-          { question: "How are you handling database connections?", contextReferenced: "General" },
-          { question: "What security measures are in place?", contextReferenced: "General" }
-        ]
-      };
+        const parsed = JSON.parse(response.text);
+        return parsed;
+      } catch (error) {
+        lastError = error;
+        console.error(`Error in InterviewerAgent (Attempt ${attempt}/3):`, error.message);
+
+        // Wait before retrying (exponential backoff: 5s, 10s)
+        if (attempt < 3) {
+          const delayMs = attempt * 5000;
+          console.log(`Waiting ${delayMs}ms before retrying...`);
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+        }
+      }
     }
+
+    // Fallback if all retries fail
+    return {
+      questions: [
+        { question: "Could you explain the overarching architecture of your application?", contextReferenced: "General" },
+        { question: "How are you handling database connections?", contextReferenced: "General" },
+        { question: `What security measures are in place? (Note: LLM Failed: ${lastError.message})`, contextReferenced: "General" }
+      ]
+    };
   }
 }

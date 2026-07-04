@@ -13,22 +13,35 @@ export default function VivaInterface() {
   const [answers, setAnswers] = useState([]);
   const [currentAnswer, setCurrentAnswer] = useState('');
   
+  const [inputType, setInputType] = useState('path'); // 'path' or 'text'
+  const [localPath, setLocalPath] = useState('');
+  
   const [isStarting, setIsStarting] = useState(false);
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [evaluation, setEvaluation] = useState(null);
+  const [startError, setStartError] = useState('');
 
   const startViva = async () => {
-    if (!codeContext || codeContext.trim().length < 10) {
-      alert('Please provide some meaningful code context first.');
+    if (inputType === 'text' && (!codeContext || codeContext.trim().length < 10)) {
+      setStartError('Please provide some meaningful code context first.');
+      return;
+    }
+    if (inputType === 'path' && (!localPath || localPath.trim().length === 0)) {
+      setStartError('Please provide a valid local directory path.');
       return;
     }
     
     setIsStarting(true);
+    setStartError('');
     try {
       const token = localStorage.getItem('token');
+      const payload = { projectId };
+      if (inputType === 'text') payload.codebaseContext = codeContext;
+      if (inputType === 'path') payload.localPath = localPath;
+
       const res = await axios.post(
         'http://localhost:5000/api/viva/start',
-        { codebaseContext: codeContext, projectId },
+        payload,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       if (res.data.questions) {
@@ -37,7 +50,7 @@ export default function VivaInterface() {
       }
     } catch (err) {
       console.error(err);
-      alert('Failed to start viva session.');
+      setStartError(err.response?.data?.error || 'Failed to start viva session. Check that the backend server is running.');
     } finally {
       setIsStarting(false);
     }
@@ -60,14 +73,17 @@ export default function VivaInterface() {
     setIsEvaluating(true);
     try {
       const token = localStorage.getItem('token');
+      const payload = { 
+        questions: questions,
+        answers: finalAnswers,
+        projectId 
+      };
+      if (inputType === 'text') payload.codebaseContext = codeContext;
+      if (inputType === 'path') payload.localPath = localPath;
+
       const res = await axios.post(
         'http://localhost:5000/api/viva/evaluate',
-        { 
-          codebaseContext: codeContext, 
-          questions: questions,
-          answers: finalAnswers,
-          projectId 
-        },
+        payload,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       setEvaluation(res.data.evaluation);
@@ -98,14 +114,51 @@ export default function VivaInterface() {
             <h2 className="font-semibold text-lg flex items-center gap-2">
               <Code2 className="w-5 h-5 text-primary" /> Codebase Context
             </h2>
+            <div className="flex bg-surface rounded-lg p-1">
+              <button 
+                onClick={() => setInputType('path')}
+                className={`px-3 py-1 text-sm rounded-md transition-colors ${inputType === 'path' ? 'bg-primary text-white' : 'text-gray-400 hover:text-white'}`}
+              >
+                Local Path
+              </button>
+              <button 
+                onClick={() => setInputType('text')}
+                className={`px-3 py-1 text-sm rounded-md transition-colors ${inputType === 'text' ? 'bg-primary text-white' : 'text-gray-400 hover:text-white'}`}
+              >
+                Text
+              </button>
+            </div>
           </div>
-          <textarea
-            className="flex-1 bg-[#1e1e1e] border border-white/10 rounded-xl p-4 font-mono text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
-            value={codeContext}
-            onChange={(e) => setCodeContext(e.target.value)}
-            disabled={questions.length > 0}
-            spellCheck={false}
-          />
+          
+          {inputType === 'path' ? (
+            <div className="flex-1 flex flex-col">
+              <label className="text-sm font-medium text-gray-400 mb-2">Absolute Path to Project Directory</label>
+              <input
+                type="text"
+                className="w-full bg-[#1e1e1e] border border-white/10 rounded-xl p-4 font-mono text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary/50"
+                placeholder="e.g., C:\Users\YourName\Projects\my-app"
+                value={localPath}
+                onChange={(e) => setLocalPath(e.target.value)}
+                disabled={questions.length > 0}
+              />
+              <p className="text-xs text-gray-500 mt-2">
+                Our backend will securely read the files in this directory to generate highly context-aware interview questions.
+              </p>
+            </div>
+          ) : (
+            <textarea
+              className="flex-1 bg-[#1e1e1e] border border-white/10 rounded-xl p-4 font-mono text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
+              value={codeContext}
+              onChange={(e) => setCodeContext(e.target.value)}
+              disabled={questions.length > 0}
+              spellCheck={false}
+            />
+          )}
+          {startError && (
+            <div className="mt-3 bg-red-500/10 border border-red-500/20 text-red-400 text-sm p-3 rounded-xl">
+              {startError}
+            </div>
+          )}
           {questions.length === 0 && (
             <button 
               onClick={startViva}
@@ -204,6 +257,35 @@ export default function VivaInterface() {
                       </li>
                     ))}
                   </ul>
+                </div>
+              )}
+
+              {evaluation.questionEvaluations && evaluation.questionEvaluations.length > 0 && (
+                <div className="space-y-4 mt-6">
+                  <h3 className="font-bold text-xl mb-4">Detailed Question Analysis</h3>
+                  {evaluation.questionEvaluations.map((qe, idx) => (
+                    <div key={idx} className="bg-surface/50 border border-white/5 rounded-2xl p-6">
+                      <div className="flex justify-between items-start mb-4 gap-4">
+                        <h4 className="font-semibold text-lg">{qe.question}</h4>
+                        <div className="bg-background-tertiary px-3 py-1 rounded-lg text-sm font-bold shrink-0">
+                          <span className={qe.score >= 7 ? 'text-accent' : qe.score >= 4 ? 'text-yellow-500' : 'text-red-500'}>{qe.score}</span> / 10
+                        </div>
+                      </div>
+                      <p className="text-gray-300 mb-4">{qe.feedback}</p>
+                      {qe.missedPoints && qe.missedPoints.length > 0 && (
+                        <div className="bg-background/50 rounded-xl p-4">
+                          <p className="text-sm font-semibold text-orange-400 mb-2">Missed in this answer:</p>
+                          <ul className="space-y-1">
+                            {qe.missedPoints.map((mp, i) => (
+                              <li key={i} className="text-sm text-gray-400 flex gap-2">
+                                <span className="text-orange-500">-</span> {mp}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
               )}
 
