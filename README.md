@@ -1,77 +1,81 @@
-# Mock-Viva & Code-Review Assistant (SaaS)
+# Mock-Viva & Code-Review Assistant
 
-This project is a Full-Stack SaaS web application designed to act as a mock-viva examiner and code-review assistant. It helps developers practice technical interviews and automated code reviews focused on architectural decisions, powered by LLM Agents (Google Gemini API).
+A powerful, decoupled full-stack SaaS application designed to act as an automated mock-viva examiner and intelligent code-review assistant. Leveraging the Google Gemini API, this application analyzes your codebase to generate architectural questions, evaluates your responses, and provides constructive feedback. It aims to help developers prepare for technical interviews and provides teams with automated insights into their architectural decisions.
 
-## Core Features
+## Tech Stack Overview
 
-- **Cloud-Ready Architecture**: Decoupled React frontend (Vite/Tailwind) and Express backend API.
-- **Persistent History**: Uses PostgreSQL (via Prisma) to store users, projects, and viva sessions.
-- **Interactive Interviewing**: An "Interviewer" agent analyzes provided code context and asks architectural/logic-based questions.
-- **Evaluation & Feedback**: An "Evaluator" agent grades the developer's answers and provides constructive feedback.
-- **Modern Dashboard**: A dashboard to track average scores, total projects reviewed, and past sessions.
+- **Backend:** Node.js, Express, Prisma ORM
+- **Database:** PostgreSQL (Supabase)
+- **AI Integration:** Google Gemini API
+- **Frontend:** React, Vite, Tailwind CSS
 
-## Architecture
+## Prerequisites
 
-The system follows a modern full-stack web application architecture where a React Frontend communicates with a Node.js/Express Backend, which in turn acts as the orchestrator between the LLM agents and the database.
+Before setting up the project, ensure you have the following ready:
+- **Node.js**: Installed on your machine.
+- **Supabase Account**: A free account to host the PostgreSQL database.
+- **Google AI Studio API Key**: A free key to access the Gemini API.
 
-```mermaid
-graph TD;
-    UI[React Frontend / Vite] -->|HTTP/REST| API[Express API / Backend];
-    API -->|JWT| AUTH[Auth Middleware];
-    API --> INT[Interviewer Agent];
-    API --> EVAL[Evaluator Agent];
-    API -->|Prisma| DB[(PostgreSQL / Supabase)];
-    INT -.-> LLM[Google Gemini API];
-    EVAL -.-> LLM;
+## Environment Variables
+
+To configure the application securely, you need to set up your environment variables. 
+Copy the provided `.env.example` file to a new file named `.env` in the root directory:
+
+```bash
+cp .env.example .env
 ```
 
-### Components
+Open the new `.env` file and provide your own credentials:
+- `DATABASE_URL`: Your Supabase PostgreSQL connection string.
+- `GEMINI_API_KEY`: Your Google AI Studio API key.
 
-- **React Frontend**: Built with React, Vite, and Tailwind CSS. Manages the UI, state, and handles routing securely with JWT.
-- **Express API Backend**: Built with Node.js and Express. Exposes REST endpoints (`/api/login`, `/api/viva/start`, etc.) and handles authentication.
-- **Database Layer**: Uses Prisma ORM connected to PostgreSQL (e.g., Supabase) for relational data management.
-- **LLM Agents**:
-  - **Interviewer Agent**: Analyzes code context via Gemini API and generates targeted questions.
-  - **Evaluator Agent**: Reviews user answers against context and provides structured JSON feedback.
+*Note: The `.env.example` file outlines exactly what keys are expected.*
 
-## User Flow
+## Installation
 
-1. **Authentication**: User logs in or registers via the secure JWT-based login screen.
-2. **Dashboard**: User lands on the analytics dashboard to view past performance.
-3. **Initialization**: User starts a new Viva Session and provides their target codebase context.
-4. **Questioning**: The backend Interviewer formulates questions about the code and sends them to the UI.
-5. **Answering**: User types their responses into the interactive interface.
-6. **Evaluation**: The backend Evaluator grades the responses, saves the result to the database, and returns the feedback.
-7. **Review**: The user views their final score, passing status, and areas for improvement.
+Follow these steps to install the necessary dependencies for both the backend and frontend:
 
-## Setup Instructions
-
-1. Install dependencies for the backend and frontend:
+1. **Install backend dependencies** (from the root directory):
    ```bash
    npm install
+   ```
+
+2. **Install frontend dependencies**:
+   ```bash
    cd frontend
    npm install
+   ```
+
+3. **Return to the root directory**:
+   ```bash
    cd ..
    ```
 
-2. Set up environment variables (`.env`):
-   ```env
-   DATABASE_URL="your-postgresql-url"
-   JWT_SECRET="your-secret-key"
-   GEMINI_API_KEY="your-gemini-key"
-   ```
+## Database Setup
 
-3. Run Prisma Migrations:
-   ```bash
-   npx prisma migrate dev
-   ```
+To automatically build the necessary tables in your blank Supabase database without having to write SQL, run the following Prisma command from the root directory:
 
-4. Start the application backend and frontend:
-   ```bash
-   # Run backend
-   npm run dev
+```bash
+npx prisma db push
+```
 
-   # Open a new terminal and run frontend
-   cd frontend
-   npm run dev
-   ```
+This command reads the `schema.prisma` file and seamlessly synchronizes your database schema.
+
+## Running the App
+
+To run the full-stack application, you will need to open **two separate terminal windows**.
+
+**Terminal 1: Start the Backend**
+From the root directory, start the Node.js/Express server:
+```bash
+npm run dev
+```
+
+**Terminal 2: Start the Frontend**
+Navigate to the frontend directory and start the Vite development server:
+```bash
+cd frontend
+npm run dev
+```
+
+The application will now be running, and you can access the frontend via the local Vite URL provided in Terminal 2 (usually `http://localhost:5173`), which securely communicates with your backend server.
